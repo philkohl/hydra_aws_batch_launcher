@@ -10,6 +10,7 @@ from hydra.types import HydraContext, TaskFunction
 from omegaconf import DictConfig
 from tqdm import tqdm
 from botocore.config import Config
+from omegaconf import DictConfig, OmegaConf
 
 from hydra_plugins.hydra_aws_batch_launcher.config import AWSBatchLauncherConf
 
@@ -106,6 +107,10 @@ class AWSBatchLauncher(Launcher):
                 'command': command
             }
         }
+
+        if self.launcher_config.aws_tags:
+            tags = OmegaConf.to_container(self.launcher_config.aws_tags, resolve=True)
+            job_parameters["tags"] = tags
 
         response = client.submit_job(**job_parameters)
         return response['jobId']

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from hydra.core.config_store import ConfigStore
 
@@ -33,6 +33,8 @@ class AWSBatchLauncherConf:
     add_config_hash: bool = False
 
     hash_key: str = ""
+
+    aws_tags: Optional[Dict] = None
 
 
 ConfigStore.instance().store(
