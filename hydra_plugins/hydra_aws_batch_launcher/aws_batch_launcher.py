@@ -44,16 +44,18 @@ class AWSBatchLauncher(Launcher):
         logger.info("Adding sweep dir and job number to all overrides")
         hashes = []
         for override in job_overrides:
-            current_hash = compute_hash(override)
-            hashes.append(current_hash)
+            for standard_override in self.launcher_config.standard_overrides:
+                override.append(standard_override)
 
             if self.launcher_config.override_job_name:
                 override.append(f"hydra.job.name={job_name}")
-            if self.launcher_config.add_config_hash:
-                override.append(f"config_hash={current_hash}")
 
-            for standard_override in self.launcher_config.standard_overrides:
-                override.append(standard_override)
+            current_hash = compute_hash(override)
+            hashes.append(current_hash)
+            if self.launcher_config.add_config_hash:
+                override.append(f"{self.launcher_config.hash_key}={current_hash}")
+
+
 
         logger.info("Submit AWS Batch jobs")
         with ThreadPoolExecutor(max_workers=self.launcher_config.n_jobs) as executor:

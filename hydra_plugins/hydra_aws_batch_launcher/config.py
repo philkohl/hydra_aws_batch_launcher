@@ -3,6 +3,7 @@ from typing import Optional, List
 
 from hydra.core.config_store import ConfigStore
 
+
 @dataclass
 class AWSBatchLauncherConf:
     _target_: str = "hydra_plugins.hydra_aws_batch_launcher.aws_batch_launcher.py.AWSBatchLauncher"
@@ -24,12 +25,14 @@ class AWSBatchLauncherConf:
     aws_retry_mode: str = "standard"
 
     aws_job_queue: str = ""
+
     aws_job_definition: str = ""
 
     override_job_name: bool = False
 
     add_config_hash: bool = False
 
+    hash_key: str = ""
 
 
 ConfigStore.instance().store(
