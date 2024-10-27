@@ -4,13 +4,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Optional, Sequence
 
 import boto3
+from botocore.config import Config
+from hydra import compose
 from hydra.core.utils import JobReturn, JobStatus
 from hydra.plugins.launcher import Launcher
 from hydra.types import HydraContext, TaskFunction
-from hydra import compose
-from tqdm import tqdm
-from botocore.config import Config
 from omegaconf import DictConfig, OmegaConf
+from tqdm import tqdm
 
 from hydra_plugins.hydra_aws_batch_launcher.config import AWSBatchLauncherConf
 
@@ -44,7 +44,7 @@ class AWSBatchLauncher(Launcher):
         logger.info(f"Starting {len(job_overrides)} jobs")
         logger.info("Adding sweep dir and job number to all overrides")
         hashes = []
-        for override in job_overrides:
+        for override in tqdm(job_overrides, desc="Processing Job Overrides", unit="override"):
             for standard_override in self.launcher_config.standard_overrides:
                 override.append(standard_override)
 
