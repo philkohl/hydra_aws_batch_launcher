@@ -7,7 +7,7 @@ import boto3
 from hydra.core.utils import JobReturn, JobStatus
 from hydra.plugins.launcher import Launcher
 from hydra.types import HydraContext, TaskFunction
-from omegaconf import DictConfig
+from hydra import compose
 from tqdm import tqdm
 from botocore.config import Config
 from omegaconf import DictConfig, OmegaConf
@@ -56,6 +56,8 @@ class AWSBatchLauncher(Launcher):
             if self.launcher_config.add_config_hash:
                 override.append(f"{self.launcher_config.hash_key}={current_hash}")
 
+            if self.launcher_config.test_config_before_submit:
+                cfg = compose(config_name=self.launcher_config.test_config_name, overrides=override)
 
 
         logger.info("Submit AWS Batch jobs")

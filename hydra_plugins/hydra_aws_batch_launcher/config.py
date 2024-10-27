@@ -36,6 +36,10 @@ class AWSBatchLauncherConf:
 
     aws_tags: Optional[Dict] = None
 
+    test_config_before_submit: bool = False
+
+    test_config_name: str = ""
+
 
 ConfigStore.instance().store(
     group="hydra/launcher",
