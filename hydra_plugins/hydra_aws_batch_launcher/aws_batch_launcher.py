@@ -1,6 +1,6 @@
 import hashlib
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from typing import Any, Optional, Sequence
 
 import boto3
@@ -9,13 +9,31 @@ from hydra import compose
 from hydra.core.utils import JobReturn, JobStatus
 from hydra.plugins.launcher import Launcher
 from hydra.types import HydraContext, TaskFunction
+from hydra_plugins.hydra_aws_batch_launcher.config import AWSBatchLauncherConf
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 
-from hydra_plugins.hydra_aws_batch_launcher.config import AWSBatchLauncherConf
-
 logger = logging.getLogger(__name__)
 
+
+def validation_callback(future):
+    batch_results = future.result()
+    logger.info(f"Batch processed successfully with {len(batch_results)} results.")
+
+def validate_batch(batch, test_config_name):
+    results = []
+    if not test_config_name:
+        raise ValueError("test_config_name cannot be empty")
+
+    for override in batch:
+        cfg = compose(config_name=test_config_name, overrides=override)
+
+    return results
+
+def batch_iterator(iterable, batch_size):
+    """Yield successive batches from the iterable."""
+    for i in range(0, len(iterable), batch_size):
+        yield iterable[i:i + batch_size]
 
 class AWSBatchLauncher(Launcher):
     def __init__(self, **kwargs: Any) -> None:
@@ -44,7 +62,9 @@ class AWSBatchLauncher(Launcher):
         logger.info(f"Starting {len(job_overrides)} jobs")
         logger.info("Adding sweep dir and job number to all overrides")
         hashes = []
-        for override in tqdm(job_overrides, desc="Processing Job Overrides", unit="override"):
+
+        for override in tqdm(job_overrides, desc="Preprocess Config", unit="config"):
+            # Process each override
             for standard_override in self.launcher_config.standard_overrides:
                 override.append(standard_override)
 
@@ -52,15 +72,36 @@ class AWSBatchLauncher(Launcher):
                 override.append(f"hydra.job.name={job_name}")
 
             current_hash = compute_hash(override)
-            hashes.append(current_hash)
             if self.launcher_config.add_config_hash:
                 override.append(f"{self.launcher_config.hash_key}={current_hash}")
 
-            if self.launcher_config.test_config_before_submit:
-                cfg = compose(config_name=self.launcher_config.test_config_name, overrides=override)
+            hashes.append(current_hash)
 
+        if self.launcher_config.test_config_before_submit:
+            self.validate_config_in_parallel(job_overrides)
 
         logger.info("Submit AWS Batch jobs")
+        return self.submit_jobs_in_parallel(hashes, job_overrides)
+
+    def validate_config_in_parallel(self, job_overrides):
+        with ProcessPoolExecutor(max_workers=self.launcher_config.test_n_processes) as executor:
+            futures = []
+
+            for batch in tqdm(batch_iterator(job_overrides, self.launcher_config.test_batch_size),
+                              desc="Scheduling Job Overrides", unit="batch"):
+                future = executor.submit(validate_batch, batch, self.launcher_config.test_config_name)
+                future.add_done_callback(validation_callback)  # Attach the callback to each future
+                futures.append(future)
+
+            logger.info("All configs scheduled for testing")
+
+            # Use tqdm to monitor completion of all futures
+            for future in tqdm(as_completed(futures), total=len(futures), desc="Processing Batches", unit="batch"):
+                future.result()
+
+            logger.info("All configs tested successfully without errors.")
+
+    def submit_jobs_in_parallel(self, hashes, job_overrides):
         with ThreadPoolExecutor(max_workers=self.launcher_config.n_jobs) as executor:
             # Submit all jobs and collect the Future objects
             futures = [
@@ -87,9 +128,7 @@ class AWSBatchLauncher(Launcher):
         job_returns = []
         for override in job_overrides:
             job_returns.append(JobReturn(status=JobStatus.COMPLETED))
-
         return job_returns
-
 
     def submit_job(self, job_name, job_queue, job_definition, command):
         retry_config = Config(

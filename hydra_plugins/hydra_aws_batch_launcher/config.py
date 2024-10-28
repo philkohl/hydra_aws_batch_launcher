@@ -40,6 +40,10 @@ class AWSBatchLauncherConf:
 
     test_config_name: str = ""
 
+    test_n_processes: int = 1
+
+    test_batch_size: int = 1
+
 
 ConfigStore.instance().store(
     group="hydra/launcher",
